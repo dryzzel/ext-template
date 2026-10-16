@@ -1,138 +1,172 @@
 import {chromium, expect} from '@playwright/test';
 import fs from 'node:fs';
-import {api, password, base, utc, php, queryString} from './helpers.mjs';
+import {api, password, base, utc, php, queryString, future} from './helpers.mjs';
 
 const fixtures = JSON.parse(fs.readFileSync('test-results/fixtures.json', 'utf8'));
 const agent = [fixtures.users.agentA.userName, password];
 const run = Date.now();
-const originalText = `Browser saved note ${run}`;
-const draftText = `Draft survives closing ${run}`;
 await api(`Preferences/${fixtures.users.agentA.id}`, {method: 'PUT', user: agent, data: {timeZone: 'America/Caracas'}});
+const legacy = await api('DovAgentNote', {method: 'POST', user: agent, data: {description: `Existing callback ${run}`, isCallback: true, dateStart: future(), reminderMinutes: 5}});
 const browser = await chromium.launch({headless: true});
-const context = await browser.newContext({viewport: {width: 1440, height: 1000}});
+const context = await browser.newContext({viewport: {width: 1500, height: 1050}});
 const page = await context.newPage();
 const errors = [];
 const frames = [];
+let checks = 0;
+const pass = message => { checks++; console.log('PASS', message); };
 page.on('websocket', socket => socket.on('framereceived', event => frames.push(event.payload.toString())));
-page.on('pageerror', error => { errors.push(error.message); console.log('BROWSER ERROR', error.message); });
-page.on('console', message => { if (message.type() === 'error') console.log('CONSOLE', message.text()); });
+page.on('pageerror', error => { errors.push(error.message); console.log('PAGE ERROR', error.message); });
+const find = text => api('DovAgentNote?' + queryString({where: [{type: 'textFilter', value: text}]}), {user: agent});
 try {
     await page.goto(base);
     await page.locator('#field-userName').fill(agent[0]);
     await page.locator('#field-password').fill(agent[1]);
     await page.locator('#btn-login').click();
     await page.locator('[data-action="toggleNotepad"]').waitFor({timeout: 30000});
-    const navFits = await page.locator('[data-action="toggleNotepad"]').evaluate(button => {
-        const label = button.querySelector('.espo-notes-nav-label');
-        return label.getBoundingClientRect().right <= button.getBoundingClientRect().right;
-    });
-    if (!navFits) throw new Error('Notepad label overflows its navigation button');
     await page.locator('[data-action="toggleNotepad"]').click();
     const panel = page.locator('#espo-notes-panel-root');
-    await expect(panel).toBeVisible();
-    await panel.locator('[name="description"]').fill(originalText + '\nSecond line');
-    await panel.locator('[name="customerName"]').fill('Browser customer');
-    await panel.locator('[name="description"]').press('Control+Enter');
-    await expect(panel.locator('.espo-notes-save-state')).toHaveText('Saved');
-    await expect(panel.locator('[data-entry-id]').filter({hasText: originalText})).toHaveCount(1);
-    console.log('PASS panel creates a note with Ctrl+Enter');
-    await panel.locator('[name="description"]').fill(draftText);
-    await panel.locator('[data-action="close"]').click();
-    await page.getByRole('button', {name: 'Keep draft and close', exact: true}).click();
-    await expect(panel).toBeHidden();
-    await page.locator('[data-action="toggleNotepad"]').click();
-    await expect(panel.locator('[name="description"]')).toHaveValue(draftText);
-    console.log('PASS unsaved draft survives close/reopen');
-    await panel.locator('[data-action="save"]').click();
-    await expect(panel.locator('.espo-notes-save-state')).toHaveText('Saved');
-    await panel.locator('[name="isCallback"]').check();
+    const row = key => panel.locator(`[data-row-key="${key}"]`);
+    await expect(row(legacy.id).locator('[name="description"]')).toHaveValue(`Existing callback ${run}`);
+    if (php('reminders', legacy.id).length !== 1) throw new Error('Existing reminder was not retained');
+    pass('existing callback and reminder appear on the unified page');
+
+    await panel.locator('[data-action="newCallback"]').click();
+    await row('new-1').locator('[name="description"]').fill(`Callback A ${run}`);
     const nextDay = new Date(Date.now() - 4 * 3600000 + 86400000).toISOString().slice(0, 10);
-    const localDate = `${nextDay}T23:30`;
-    await panel.locator('[name="localDate"]').fill(localDate);
-    await panel.locator('[name="reminderMinutes"]').selectOption('15');
-    await panel.locator('[data-action="save"]').click();
-    await expect(panel.locator('.espo-notes-save-state')).toHaveText('Saved');
-    await panel.locator('[data-tab="callbacks"]').click();
-    await expect(panel.locator('[data-entry-id]').filter({hasText: draftText})).toHaveCount(1);
-    const callbackRow = await api('DovAgentNote?' + queryString({where: [{type: 'textFilter', value: draftText}]}), {user: agent});
-    if (callbackRow.list[0].dateStart !== utc(new Date(localDate + '-04:00'))) throw new Error('Timezone conversion failed');
-    if (callbackRow.list[0].dateStart.slice(0, 10) <= nextDay) throw new Error('UTC date boundary did not advance');
-    await expect(panel.locator('.espo-notes-list h5').filter({hasText: 'Upcoming'})).toBeVisible();
-    console.log('PASS note converts to callback in place');
-    await page.screenshot({path: 'test-results/notepad-desktop.png', fullPage: true});
-    await page.setViewportSize({width: 390, height: 844});
-    await expect(panel).toBeVisible();
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-    if (overflow) throw new Error('Mobile page has horizontal overflow');
-    await page.screenshot({path: 'test-results/notepad-mobile.png'});
-    console.log('PASS narrow layout stays inside viewport');
-    await page.setViewportSize({width: 1440, height: 1000});
-    await panel.locator('[data-action="complete"]').click();
-    await expect(panel.locator('.espo-notes-save-state')).toHaveText('Saved');
-    await panel.locator('[data-tab="history"]').click();
-    await expect(panel.locator('[data-entry-id]').filter({hasText: draftText})).toHaveCount(1);
-    console.log('PASS completion appears in history');
-    await panel.locator('[name="description"]').fill(`Retry draft ${run}`);
-    await page.route('**/api/v1/DovAgentNote/*', async route => {
-        if (route.request().method() === 'PUT') {
-            await route.fulfill({status: 503, contentType: 'application/json', body: '{}'});
-        } else await route.continue();
+    const dateA = `${nextDay}T23:30`;
+    const dateB = `${nextDay}T23:45`;
+    await row('new-1').locator('[name="localDate"]').fill(dateA);
+    await row('new-1').locator('[name="reminderMinutes"]').selectOption('5');
+    await panel.locator('[data-action="newCallback"]').click();
+    await row('new-2').locator('[name="description"]').fill(`Callback B ${run}`);
+    await row('new-2').locator('[name="localDate"]').fill(dateB);
+    await row('new-2').locator('[name="reminderMinutes"]').selectOption('15');
+    await row('new-2').locator('[name="description"]').press('Control+Enter');
+    await expect(panel.locator('.espo-notes-notice')).toHaveText('Saved 2 callback rows.');
+    const a = (await find(`Callback A ${run}`)).list[0];
+    const b = (await find(`Callback B ${run}`)).list[0];
+    if (!a || !b || php('reminders', a.id)[0].seconds !== 300 || php('reminders', b.id)[0].seconds !== 900) throw new Error('Independent reminders failed');
+    if (a.dateStart !== utc(new Date(dateA + '-04:00')) || a.dateStart.slice(0, 10) <= nextDay) throw new Error('Caracas UTC date boundary failed');
+    pass('two inline callbacks save together with separate dates and reminders');
+
+    await row('new-1').locator('[name="description"]').fill(`Draft A ${run}`);
+    await row('new-2').locator('[name="description"]').fill(`Draft B ${run}`);
+    await panel.locator('[data-action="close"]').click();
+    await page.getByRole('button', {name: 'Keep drafts and close', exact: true}).click();
+    await page.locator('[data-action="toggleNotepad"]').click();
+    await expect(row('new-1').locator('[name="description"]')).toHaveValue(`Draft A ${run}`);
+    await expect(row('new-2').locator('[name="description"]')).toHaveValue(`Draft B ${run}`);
+    pass('multiple unsaved row drafts survive closing and reopening');
+
+    await page.route(`**/api/v1/DovAgentNote/${a.id}`, async route => {
+        if (route.request().method() === 'PUT') await route.fulfill({status: 503, contentType: 'application/json', body: '{}'});
+        else await route.continue();
     });
-    await panel.locator('[data-action="save"]').click();
-    await expect(panel.locator('.espo-notes-error')).toBeVisible();
-    await expect(panel.locator('[name="description"]')).toHaveValue(`Retry draft ${run}`);
-    await page.unroute('**/api/v1/DovAgentNote/*');
-    await panel.locator('[data-action="save"]').click();
-    await expect(panel.locator('.espo-notes-save-state')).toHaveText('Saved');
-    console.log('PASS failed save preserves draft and retry succeeds');
+    await panel.locator('[data-action="saveAll"]').click();
+    await expect(panel.locator('.espo-notes-notice')).toHaveText('Saved 1 of 2 rows. Unsaved rows keep your changes.');
+    await expect(row('new-1').locator('.espo-notes-row-error')).toBeVisible();
+    await expect(row('new-1').locator('[name="description"]')).toHaveValue(`Draft A ${run}`);
+    if ((await api(`DovAgentNote/${b.id}`, {user: agent})).description !== `Draft B ${run}`) throw new Error('Other row failed to save');
+    await page.unroute(`**/api/v1/DovAgentNote/${a.id}`);
+    await panel.locator('[data-action="saveAll"]').click();
+    await expect(panel.locator('.espo-notes-notice')).toHaveText('Saved 1 callback rows.');
+    pass('partial save reports failures, preserves drafts, and retries only unsaved rows');
 
-    const lead = await api('Lead', {method: 'POST', user: agent, data: {lastName: `Browser link ${run}`}});
+    await api(`DovAgentNote/${b.id}`, {method: 'PUT', user: agent, data: {description: `Remote change ${run}`}});
+    await row('new-2').locator('[name="description"]').fill(`Stale edit ${run}`);
+    await row('new-2').locator('[data-action="rowSave"]').click();
+    await expect(row('new-2').locator('.espo-notes-row-error')).toContainText('changed in another tab');
+    await expect(row('new-2').locator('[name="description"]')).toHaveValue(`Stale edit ${run}`);
+    await row('new-1').locator('[name="description"]').fill(`Protected other draft ${run}`);
+    await row('new-2').locator('[data-action="rowReload"]').click();
+    await page.locator('.modal').getByRole('button', {name: 'Reload row', exact: true}).click();
+    await expect(row('new-2').locator('[name="description"]')).toHaveValue(`Remote change ${run}`);
+    await expect(row('new-1').locator('[name="description"]')).toHaveValue(`Protected other draft ${run}`);
+    await panel.locator('[data-action="saveAll"]').click();
+    await expect(panel.locator('.espo-notes-notice')).toHaveText('Saved 1 callback rows.');
+    pass('stale edits are rejected and reloading one row preserves other drafts');
+
+    await row('new-1').locator('[name="done"]').check();
+    await expect(row('new-1')).toHaveCount(0);
+    if (php('reminders', a.id).length !== 0 || php('reminders', b.id).length !== 1) throw new Error('Completion affected another reminder');
+    await panel.locator('[name="showHistory"]').check();
+    await expect(row('new-1').locator('[name="done"]')).toBeChecked();
+    await row('new-1').locator('[data-action="rowReschedule"]').click();
+    await row('new-1').locator('[name="localDate"]').fill(dateA);
+    await row('new-1').locator('[data-action="rowSave"]').click();
+    await expect(row('new-1').locator('.espo-notes-row-state')).toHaveText('Saved');
+    if (php('reminders', a.id).length !== 1) throw new Error('Reschedule failed');
+    pass('row completion cancels only its own reminder and history supports rescheduling');
+
+    const lead = await api('Lead', {method: 'POST', user: agent, data: {lastName: `Notebook lead ${run}`}});
     await page.goto(`${base}/#Lead/view/${lead.id}`);
-    await expect(page.locator('#main .page-header')).toContainText(`Browser link ${run}`);
+    await expect(page.locator('#main .page-header')).toContainText(`Notebook lead ${run}`);
     if (!await panel.isVisible()) await page.locator('[data-action="toggleNotepad"]').click();
-    await panel.locator('[data-action="new"]').click();
-    await panel.locator('[name="description"]').fill(`Linked from current record ${run}`);
-    await panel.locator('[data-action="currentRecord"]').click();
-    await expect(panel.locator('.espo-notes-parent-name')).toHaveText(`Browser link ${run}`);
-    await panel.locator('[data-action="save"]').click();
-    await expect(panel.locator('.espo-notes-save-state')).toHaveText('Saved');
-    console.log('PASS Use current record links the open Lead');
+    await row('new-2').locator('summary').click();
+    await row('new-2').locator('[data-action="rowCurrentRecord"]').click();
+    await expect(row('new-2').locator('.espo-notes-row-parent')).toHaveText(`Notebook lead ${run}`);
+    await row('new-2').locator('[data-action="rowSave"]').click();
+    await expect(row('new-2').locator('.espo-notes-row-state')).toHaveText('Saved');
+    if ((await api(`DovAgentNote/${b.id}`, {user: agent})).parentId !== lead.id) throw new Error('Row parent link failed');
+    pass('each callback row can independently link the current CRM record');
 
-    await panel.locator('[data-action="new"]').click();
-    const doubleText = `Double click ${run}`;
-    await panel.locator('[name="description"]').fill(doubleText);
-    await panel.locator('[data-action="save"]').evaluate(button => { button.click(); button.click(); });
-    await expect(panel.locator('.espo-notes-save-state')).toHaveText('Saved');
-    const duplicates = await api('DovAgentNote?' + queryString({where: [{type: 'textFilter', value: doubleText}]}), {user: agent});
-    if (duplicates.total !== 1) throw new Error('Double click created duplicate entries');
-    await panel.locator('[data-tab="notes"]').click();
-    await panel.locator('#espo-notes-search').fill(doubleText);
-    await expect(panel.locator('[data-entry-id]')).toHaveText([doubleText]);
-    console.log('PASS double click creates one entry and panel search filters it');
+    await panel.locator('[data-action="newCallback"]').click();
+    await panel.locator('[data-action="saveAll"]').click();
+    await expect(row('new-3').locator('.espo-notes-row-error')).toHaveText('Enter callback notes.');
+    await expect(panel.locator('.espo-notes-notice')).toHaveText('Fix the highlighted rows. Nothing was saved.');
+    await row('new-3').locator('[data-action="rowRemove"]').click();
+    await expect(row('new-3')).toHaveCount(0);
+    pass('blank rows prevent bulk saving and can be removed without changing saved callbacks');
 
-    await panel.locator('[data-action="fullList"]').click();
-    await page.waitForURL('**/#DovAgentNote');
-    await expect(page.locator('#main .page-header')).toContainText('Agent Notes');
-    await expect(page.locator('#main .list-container').first()).toBeVisible();
-    console.log('PASS full list opens');
-    await page.goto(`${base}/#DovAgentNote/create`);
-    await expect(page.locator('#main .field[data-name="description"] textarea')).toBeVisible();
-    await page.locator('#main .field[data-name="description"] textarea').fill(`Native form ${run}`);
-    await page.locator('#main [data-action="save"]').first().click();
-    await page.waitForURL(/#DovAgentNote\/view\//);
-    await expect(page.locator('#main .field[data-name="status"]')).toContainText('Open');
-    await expect(page.locator('#main .field[data-name="description"]')).toContainText(`Native form ${run}`);
-    console.log('PASS native create form saves and displays note fields');
-    const wsPopup = await api('DovAgentNote', {method: 'POST', user: agent, data: {
-        description: `WS callback ${run}`, isCallback: true, dateStart: utc(new Date(Date.now() + 4000)), reminderMinutes: 0,
-    }});
+    await page.screenshot({path: 'test-results/notepad-desktop.png'});
+    await page.setViewportSize({width: 390, height: 844});
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile overflow');
+    await row('new-2').locator('[name="description"]').scrollIntoViewIfNeeded();
+    await page.screenshot({path: 'test-results/notepad-mobile.png'});
+    pass('the same callback page works on narrow screens');
+    await page.setViewportSize({width: 1500, height: 1050});
+    await page.reload();
+    await page.locator('[data-action="toggleNotepad"]').click();
+    await expect(row(a.id).locator('[name="description"]')).toHaveValue(`Protected other draft ${run}`);
+    await expect(row(b.id).locator('[name="description"]')).toHaveValue(`Remote change ${run}`);
+    if ((await find(`Protected other draft ${run}`)).total !== 1) throw new Error('Duplicate saved row');
+    pass('saved rows persist across reload without duplicate callback records');
+
+    await panel.locator('#espo-notes-search').fill(`Remote change ${run}`);
+    await expect(panel.locator('.espo-notes-row')).toHaveCount(1);
+    await expect(row(b.id)).toBeVisible();
+    await panel.locator('#espo-notes-search').fill('');
+    await expect(row(a.id)).toBeVisible();
+    pass('page search filters callbacks without opening individual notes');
+
+    const paged = [];
+    for (let offset = 0; offset < 51; offset += 6) {
+        paged.push(...await Promise.all(Array.from({length: Math.min(6, 51 - offset)}, (_, i) => api('DovAgentNote', {
+            method: 'POST', user: agent, data: {description: `Extra callback ${offset + i} ${run}`,
+                isCallback: true, dateStart: future(2880 + offset + i), reminderMinutes: -1},
+        }))));
+    }
+    await panel.locator('[data-action="refresh"]').click();
+    await expect(panel.locator('[data-action="more"]')).toBeVisible();
+    for (let pageNumber = 0; pageNumber < 20 && await panel.locator('[data-action="more"]').isVisible(); pageNumber++) {
+        const count = await panel.locator('.espo-notes-row').count();
+        await panel.locator('[data-action="more"]').click();
+        await expect.poll(async () => await panel.locator('.espo-notes-row').count() > count || !await panel.locator('[data-action="more"]').isVisible()).toBe(true);
+    }
+    await expect(row(paged.at(-1).id).locator('[name="description"]')).toHaveValue(`Extra callback 50 ${run}`);
+    await expect(panel.locator('[data-action="more"]')).toBeHidden();
+    pass('Load more includes all callbacks when an agent has more than 50 rows');
+
+    const popup = await api('DovAgentNote', {method: 'POST', user: agent, data: {description: `Notebook popup ${run}`, isCallback: true, dateStart: utc(new Date(Date.now() + 4000)), reminderMinutes: 0}});
     await new Promise(resolve => setTimeout(resolve, 5000));
     php('submit-popups');
-    await expect.poll(() => frames.some(frame => frame.includes(wsPopup.id)), {timeout: 10000}).toBe(true);
-    await expect(page.getByText(`WS callback ${run}`, {exact: true})).toBeVisible();
-    console.log('PASS native WebSocket delivers and renders callback popup');
-    await api(`DovAgentNote/${wsPopup.id}`, {method: 'PUT', user: agent, data: {status: 'Completed'}});
-    // A separate context avoids reusing the agent's EspoCRM login storage.
+    await expect.poll(() => frames.some(frame => frame.includes(popup.id)), {timeout: 10000}).toBe(true);
+    await expect(page.getByText(`Notebook popup ${run}`, {exact: true})).toBeVisible();
+    await api(`DovAgentNote/${popup.id}`, {method: 'PUT', user: agent, data: {status: 'Completed'}});
+    pass('native WebSocket callback reminders still render');
+
+    await panel.locator('[data-action="fullList"]').click();
+    await expect(page.locator('#main .page-header')).toContainText('Agent Notes');
     const managerContext = await browser.newContext();
     const manager = await managerContext.newPage();
     await manager.goto(base);
@@ -140,16 +174,16 @@ try {
     await manager.locator('#field-password').fill(password);
     await manager.locator('#btn-login').click();
     await manager.locator('[data-action="toggleNotepad"]').waitFor();
-    await manager.goto(`${base}/#DovAgentNote/view/${duplicates.list[0].id}`);
-    await expect(manager.locator('#main .page-header')).toContainText(doubleText);
+    await manager.goto(`${base}/#DovAgentNote/view/${b.id}`);
+    await expect(manager.locator('#main .page-header')).toContainText(`Remote change ${run}`);
     await expect(manager.locator('#main [data-action="edit"]')).toBeHidden();
-    await expect(manager.locator('#main .field[data-name="status"]')).toContainText('Open');
-    await manager.screenshot({path: 'test-results/manager-read-only.png', fullPage: true});
-    console.log('PASS manager can open an agent note without edit controls');
+    await manager.screenshot({path: 'test-results/manager-read-only.png'});
     await managerContext.close();
+    pass('manager review remains read-only');
     if (errors.length) throw new Error(errors.join('\n'));
+    console.log(`Browser integration: ${checks} workflow checks passed.`);
 } catch (error) {
-    await page.screenshot({path: 'test-results/browser-failure.png', fullPage: true});
+    await page.screenshot({path: 'test-results/browser-failure.png'});
     fs.writeFileSync('test-results/browser-failure.html', await page.content());
     throw error;
 } finally { await browser.close(); }

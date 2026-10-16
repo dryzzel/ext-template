@@ -4,7 +4,7 @@ export function emptyDraft() {
 }
 
 export function errorText(error) {
-    if (error.status === 409) return 'This entry changed in another tab. Reopen it before saving; your draft is still here.';
+    if (error.status === 409) return 'This row changed in another tab. Copy any changes you need, then use Reload row. Other drafts stay here.';
     if (error.status === 403) return 'You do not have permission to change this entry.';
     if (error.status === 0) return 'Connection lost. Your draft is still here. Check your connection before retrying.';
     let message;

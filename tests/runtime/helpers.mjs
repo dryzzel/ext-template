@@ -9,6 +9,7 @@ export const stamp = Date.now().toString(36);
 export const utc = date => date.toISOString().slice(0, 19).replace('T', ' ');
 export const future = (minutes = 90) => utc(new Date(Date.now() + minutes * 60000));
 export const artifacts = 'test-results';
+export const packageFile = `espo-notes-${JSON.parse(fs.readFileSync('package.json', 'utf8')).version}.zip`;
 fs.mkdirSync(artifacts, {recursive: true});
 
 export function queryString(parameters) {

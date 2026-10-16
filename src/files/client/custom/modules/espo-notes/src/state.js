@@ -6,7 +6,7 @@ export default function getState(userId) {
         if (key !== userId) sessions.delete(key);
     }
     if (!sessions.has(userId)) {
-        sessions.set(userId, {draft: null, original: null, dirty: false, tab: 'notes'});
+        sessions.set(userId, {rows: {}, serverKeys: [], nextKey: 0, history: false, dirty: false});
     }
     return sessions.get(userId);
 }

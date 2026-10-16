@@ -1,5 +1,5 @@
 import {execFileSync} from 'node:child_process';
-import {api, php} from './helpers.mjs';
+import {api, php, packageFile} from './helpers.mjs';
 
 const run = (command, args) => execFileSync(command, args, {stdio: 'inherit'});
 run('docker', ['compose', '-f', 'compose.dev.yaml', 'up', '-d', 'crm']);
@@ -10,7 +10,7 @@ for (let i = 0; i < 90; i++) {
 }
 if (!ready) throw new Error('CRM did not become ready. Inspect docker compose logs.');
 run(process.execPath, ['build.js', '--extension']);
-run('docker', ['compose', '-f', 'compose.dev.yaml', 'exec', '-T', '-u', 'www-data', 'crm', 'php', 'command.php', 'extension', '--file=/packages/espo-notes-1.0.0.zip']);
+run('docker', ['compose', '-f', 'compose.dev.yaml', 'exec', '-T', '-u', 'www-data', 'crm', 'php', 'command.php', 'extension', `--file=/packages/${packageFile}`]);
 php('websocket-on');
 run('docker', ['compose', '-f', 'compose.dev.yaml', '--profile', 'websocket', 'up', '-d', 'websocket']);
 console.log('Disposable EspoCRM 9.3.3 ready at http://localhost:8093 (admin / notes-dev-admin).');
