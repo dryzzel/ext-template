@@ -1,0 +1,4 @@
+[
+    {"rows": [[{"name": "description", "fullWidth": true}], [{"name": "customerName"}, {"name": "phoneNumber"}], [{"name": "isCallback"}, {"name": "status"}], [{"name": "dateStart"}, {"name": "reminderMinutes"}], [{"name": "parent", "fullWidth": true}]]},
+    {"label": "Assignment", "rows": [[{"name": "assignedUser"}, {"name": "teams"}], [{"name": "createdAt"}, {"name": "modifiedAt"}]]}
+]

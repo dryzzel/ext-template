@@ -1,0 +1,5 @@
+[
+    {"name": "name", "link": true, "width": 30}, {"name": "customerName", "width": 15},
+    {"name": "phoneNumber", "width": 12}, {"name": "dateStart", "width": 15},
+    {"name": "status", "width": 10}, {"name": "assignedUser", "width": 12}
+]

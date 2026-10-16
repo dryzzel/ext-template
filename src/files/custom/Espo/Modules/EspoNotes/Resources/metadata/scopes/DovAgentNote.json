@@ -1,0 +1,6 @@
+{
+    "entity": true, "object": true, "module": "EspoNotes", "acl": true, "aclPortal": false,
+    "tab": true, "layouts": true, "customizable": true, "importable": false, "stream": false,
+    "notifications": false, "statusField": "status",
+    "completedStatusList": ["Completed"], "canceledStatusList": ["Archived"]
+}

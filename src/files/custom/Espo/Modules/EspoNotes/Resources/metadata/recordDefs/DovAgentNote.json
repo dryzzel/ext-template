@@ -1,0 +1,9 @@
+{
+    "readLoaderClassNameList": ["Espo\\Core\\FieldProcessing\\Reminder\\Loader"],
+    "saverClassNameList": ["Espo\\Modules\\EspoNotes\\Classes\\FieldProcessing\\ReminderSaver"],
+    "beforeCreateHookClassNameList": ["Espo\\Modules\\EspoNotes\\Classes\\RecordHooks\\Note\\BeforeSave"],
+    "beforeUpdateHookClassNameList": ["Espo\\Modules\\EspoNotes\\Classes\\RecordHooks\\Note\\BeforeSave"],
+    "beforeDeleteHookClassNameList": ["Espo\\Modules\\EspoNotes\\Classes\\RecordHooks\\Note\\BeforeDelete"],
+    "beforeLinkHookClassNameList": ["Espo\\Modules\\EspoNotes\\Classes\\RecordHooks\\Note\\ProtectLinks"],
+    "beforeUnlinkHookClassNameList": ["Espo\\Modules\\EspoNotes\\Classes\\RecordHooks\\Note\\ProtectLinks"]
+}

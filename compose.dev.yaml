@@ -1,0 +1,48 @@
+name: espo-notes-dev
+services:
+  db:
+    image: mysql:8.0-oraclelinux8
+    environment:
+      MYSQL_ROOT_PASSWORD: notes-dev-root
+      MYSQL_DATABASE: espocrm
+      MYSQL_USER: espocrm
+      MYSQL_PASSWORD: notes-dev-db
+    volumes:
+      - notes-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pnotes-dev-root"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  crm:
+    image: espocrm/espocrm:9.3.3
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ESPOCRM_DATABASE_HOST: db
+      ESPOCRM_DATABASE_NAME: espocrm
+      ESPOCRM_DATABASE_USER: espocrm
+      ESPOCRM_DATABASE_PASSWORD: notes-dev-db
+      ESPOCRM_ADMIN_USERNAME: admin
+      ESPOCRM_ADMIN_PASSWORD: notes-dev-admin
+      ESPOCRM_SITE_URL: http://localhost:8093
+    ports:
+      - "127.0.0.1:8093:80"
+    volumes:
+      - notes-crm:/var/www/html
+      - ./build:/packages:ro
+      - ./tests/runtime:/tests:ro
+  websocket:
+    image: espocrm/espocrm:9.3.3
+    profiles: [websocket]
+    entrypoint: [php, websocket.php]
+    working_dir: /var/www/html
+    depends_on: [crm]
+    ports:
+      - "127.0.0.1:8094:8080"
+    volumes:
+      - notes-crm:/var/www/html
+volumes:
+  notes-db:
+  notes-crm:

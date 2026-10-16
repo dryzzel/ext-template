@@ -1,11 +1,9 @@
 {
-  "name": "espocrm-ext-{@nameHyphen}",
-  "version": "0.0.1",
-  "description": "",
+  "name": "espocrm-ext-espo-notes",
+  "version": "1.0.0",
+  "description": "Agent notes and callbacks for EspoCRM 9.3.3",
   "scripts": {
     "sa": "vendor/bin/phpstan",
-    "unit-tests": "vendor/bin/phpunit",
-    "integration-tests": "node build --copy && node build --composer-install && cd site && php vendor/bin/phpunit tests/integration/Espo/Modules/{@name}",
     "copy": "node build --copy",
     "composer-install": "node build --composer-install",
     "sync": "node build --copy && node build --composer-install",
@@ -13,10 +11,17 @@
     "clear-cache": "php site/clear_cache.php",
     "rebuild": "node build --rebuild",
     "all": "node build --all",
-    "prepare-test": "node build --prepare-test"
+    "prepare-test": "node build --prepare-test",
+    "test": "npm run test:integration && npm run test:browser && npm run test:lifecycle",
+    "dev:setup": "node tests/runtime/setup.mjs",
+    "dev:stop": "docker compose -f compose.dev.yaml --profile websocket down",
+    "test:lifecycle": "node tests/runtime/lifecycle.mjs",
+    "test:integration": "node tests/runtime/api.mjs",
+    "test:browser": "node tests/runtime/browser.mjs",
+    "test:lint": "node tests/runtime/lint.mjs"
   },
   "type": "module",
-  "author": "{@author}",
+  "author": "DOV",
   "dependencies": {
     "espo-extension-tools": "github:espocrm/extension-tools#0.4.5",
     "fs-extra": "^9.0.0"
@@ -24,5 +29,8 @@
   "engines": {
     "npm": ">=8",
     "node": ">=18"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
   }
 }

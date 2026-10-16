@@ -9,3 +9,6 @@
 /vendor
 /.phpunit.result.cache
 /composer.phar
+/.runtime/
+/test-results/
+/playwright-report/

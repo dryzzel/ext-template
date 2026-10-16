@@ -1,0 +1,8 @@
+{
+    "items": {
+        "espoNotes": {
+            "view": "espo-notes:views/navbar", "class": "espo-notes-navbar", "order": 12,
+            "accessDataList": [{"scope": "DovAgentNote", "action": "read", "inPortalDisabled": true}]
+        }
+    }
+}

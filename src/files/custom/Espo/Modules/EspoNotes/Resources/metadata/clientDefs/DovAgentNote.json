@@ -1,0 +1,14 @@
+{
+    "controller": "controllers/record",
+    "recordViews": {"edit": "espo-notes:views/record/edit", "detail": "espo-notes:views/record/detail"},
+    "dynamicLogic": {
+        "fields": {
+            "dateStart": {"visible": {"conditionGroup": [{"type": "isTrue", "attribute": "isCallback"}]}, "required": {"conditionGroup": [{"type": "isTrue", "attribute": "isCallback"}]}},
+            "reminderMinutes": {"visible": {"conditionGroup": [{"type": "isTrue", "attribute": "isCallback"}]}}
+        }
+    },
+    "filterList": ["all", "open", "callbacks", "overdue", "history"],
+    "boolFilterList": ["onlyMy"],
+    "selectDefaultOrderBy": "modifiedAt", "selectDefaultOrder": "desc",
+    "color": "#5179a4", "iconClass": "fas fa-sticky-note"
+}

@@ -1,0 +1,26 @@
+name: Espo Notes 9.3.3
+on: [push, pull_request]
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run dev:setup
+      - run: npm run test:lint
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: espo-notes-package-and-results
+          path: |
+            build/*.zip
+            test-results/
+      - if: always()
+        run: docker compose -f compose.dev.yaml --profile websocket down

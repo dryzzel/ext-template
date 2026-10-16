@@ -1,0 +1,8 @@
+{
+    "primaryFilterClassNameMap": {
+        "open": "Espo\\Modules\\EspoNotes\\Classes\\Select\\Note\\Open",
+        "callbacks": "Espo\\Modules\\EspoNotes\\Classes\\Select\\Note\\Callbacks",
+        "overdue": "Espo\\Modules\\EspoNotes\\Classes\\Select\\Note\\Overdue",
+        "history": "Espo\\Modules\\EspoNotes\\Classes\\Select\\Note\\History"
+    }
+}

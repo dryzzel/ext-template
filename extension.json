@@ -1,14 +1,14 @@
 {
-    "module": "{@name}",
-    "name": "{@nameLabel}",
-    "description": "{@description}",
-    "author": "{@author}",
-    "bundled": {@bundled},
-    "acceptableVersions": [
-        ">=9.3.0"
-    ],
-    "php": [
-        ">=8.3"
-    ],
-    "scripts": []
+  "module": "EspoNotes",
+  "name": "Espo Notes",
+  "description": "Agent notes and callback reminders.",
+  "author": "DOV",
+  "bundled": true,
+  "acceptableVersions": [
+    ">=9.3.3 <9.4.0"
+  ],
+  "php": [
+    ">=8.3 <8.6"
+  ],
+  "scripts": []
 }

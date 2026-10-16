@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import fs from 'node:fs';
+import {api, password, future, php} from './helpers.mjs';
+
+const fixtures = JSON.parse(fs.readFileSync('test-results/fixtures.json', 'utf8'));
+const user = [fixtures.users.agentA.userName, password];
+const run = args => execFileSync('docker', ['compose', '-f', 'compose.dev.yaml', 'exec', '-T', '-u', 'www-data', 'crm', 'php', 'command.php', 'extension', ...args], {stdio: 'inherit'});
+const note = await api('DovAgentNote', {method: 'POST', user, data: {description: 'Lifecycle preservation', isCallback: true, dateStart: future(), reminderMinutes: 15}});
+assert.equal(php('reminders', note.id).length, 1);
+run(['--file=/packages/espo-notes-1.0.0.zip']);
+assert.equal((await api(`DovAgentNote/${note.id}`, {user})).description, note.description);
+assert.equal(php('reminders', note.id).length, 1);
+console.log('PASS in-place installation preserves data without duplicating reminders');
+run(['-u', '--name=Espo Notes']);
+assert.equal(php('all-reminders'), 0);
+console.log('PASS uninstall removes all outstanding extension reminders');
+run(['--file=/packages/espo-notes-1.0.0.zip']);
+assert.equal((await api(`DovAgentNote/${note.id}`, {user})).description, note.description);
+const restored = php('reminders', note.id);
+assert.equal(restored.length, 1);
+assert.equal(restored[0].seconds, 900);
+assert.equal(restored[0].userId, fixtures.users.agentA.id);
+console.log('PASS reinstall preserves entries and restores future reminders');

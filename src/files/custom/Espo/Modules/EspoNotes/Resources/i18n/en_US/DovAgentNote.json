@@ -1,0 +1,6 @@
+{
+    "fields": {"description": "Note", "customerName": "Customer name", "phoneNumber": "Phone", "isCallback": "Callback", "dateStart": "Callback time", "reminderMinutes": "Remind me", "parent": "Related record", "assignedUser": "Agent"},
+    "options": {"status": {"Open": "Open", "Completed": "Completed", "Archived": "Archived"}, "reminderMinutes": {"-1": "No reminder", "0": "At callback time", "5": "5 minutes before", "15": "15 minutes before", "60": "60 minutes before"}},
+    "presetFilters": {"open": "Open", "callbacks": "Callbacks", "overdue": "Overdue", "history": "History"},
+    "labels": {"Create DovAgentNote": "Create Note"}
+}

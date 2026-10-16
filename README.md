@@ -1,389 +1,116 @@
-# Template repository for EspoCRM extensions
+﻿# Espo Notes
 
-Create a repository for your extension from this template.
+Installable agent notepad and callback reminders for **EspoCRM 9.3.3**. Version **1.0.0**.
 
-(rename the header after initialization and change the text of the paragraph)
+Agents open **Notepad** in the top bar, save a note, optionally schedule a callback, and complete or archive it when finished. Authorized managers review team entries through **Full list**. Records are stored in EspoCRM and use its normal login, permissions, timezone preferences, and popup reminder system.
 
-## Preparing repository
+## Install
 
-(remove this section after initialization)
+1. Back up your CRM database and files using your usual procedure.
+2. Sign in as an administrator. Open **Administration > Extensions**.
+3. Upload `build/espo-notes-1.0.0.zip` and click **Install**.
+4. Configure the roles below. Refresh the agents' browser tabs after installation and role changes.
+5. Confirm each agent's **Preferences > Time Zone** before scheduling callbacks.
 
-Run:
+The package supports `>=9.3.3 <9.4.0` and PHP `>=8.3 <8.6`, matching the target CRM runtime. Compatibility with other EspoCRM release families has not been tested.
 
-```
-php init.php
-```
+The installer adds **Agent Notes** to the navigation tab list. Existing users with a customized tab list may need to add it in Preferences. **Notepad > Full list** also opens it directly.
 
-It will ask to enter an extension name and some other information. After the initialization, the script will prompt you to run `npm install`.
+## Role configuration
 
-After initialization, placeholders in the readme file will be replaced with values specific to your extension.
-Use the changed readme as the documentation.
+Create an Agent role and a Manager role, or add these scope settings to your existing roles. The scope appears as **Agent Notes**.
 
-After initialization, you can remove `init.php` file from your repository. Commit the changes and proceed to configuration & building.
+| Action | Agent | Manager |
+| --- | --- | --- |
+| Create | Yes | Yes |
+| Read | Own | Team |
+| Edit | Own | Own |
+| Delete | Own, or No if archiving is sufficient | No |
+| Stream | No | No |
 
-## Configuration
+Give agents their Agent role. Give managers their Manager role and membership in the teams they oversee. Each new entry receives its author's user ID and current CRM teams. Teams are captured at creation; moving an agent to a different team does not move historical notes automatically. Reassignment and manual sharing are disabled.
 
-Create `config.json` file in the root directory, or copy `config-default.json`:
+Managers can create and edit their own notes. They cannot edit, reschedule, archive, or delete another agent's entries. Administrators retain administrative access.
 
-```
-cp config-default.json config.json
-```
+**Check effective access:** EspoCRM merges the user's direct, team, and baseline roles using the most permissive rule. Open each pilot user's **Access** dialog and verify Agent Notes Read/Edit levels. A separate role granting Read All or Team would also grant that visibility. Portal access is disabled. Grant normal read access to Leads, Contacts, Accounts, Opportunities, or Cases only where agents should be able to link those records.
 
-When extension tools read config parameters, `config-default.json` is used as the fallback source. You can override default parameters in the `config.json` file.
+No roles or team memberships are created or changed automatically by this extension.
 
-Parameters:
+## Daily use
 
-* espocrm.repository – from what repository to fetch EspoCRM;
-* espocrm.branch – what branch to fetch (`stable` is set by default); you can specify version number instead (e.g. `10.0.0`);
-* database - credentials of the dev database;
-* install.siteUrl – site url of the dev instance;
-* install.defaultOwner – a webserver owner (important to be set right);
-* install.defaultGroup – a webserver group (important to be set right).
+- Open **Notepad** from any CRM screen. The badge counts your overdue callbacks.
+- **Notes**, **Callbacks**, and **History** show your own entries. Use **Full list** for manager review, native search, and filters for agent, teams, status, linked record, or callback dates.
+- Enter note text; customer name and phone are optional. The first line becomes the list title.
+- Check **Schedule a callback**, choose the time shown in your CRM timezone, and select a popup at the scheduled time or 5, 15, or 60 minutes before. **No reminder** still keeps the callback in the queue.
+- **Use current record** links the open Lead, Contact, Account, Opportunity, or Case. **Select** lets you choose a readable CRM record. **Clear link** makes the note standalone.
+- Click **Save** or press **Ctrl+Enter**. **Complete** and **Archive** move an entry to History and cancel its pending reminder. **Reschedule** lets you choose a new time, including reopening a completed callback.
+- Closing the panel keeps the current draft in memory. Switching entries asks before discarding changes. Reloading or signing out loses unsaved drafts; the browser warns before leaving with unsaved changes. Drafts are not stored offline.
+- A failed save keeps the draft. A conflict message means another tab changed that entry: copy any text you need, reopen the entry, then apply your changes to the current version.
 
+## Reminders
 
-## Config for EspoCRM instance
+Popups appear while EspoCRM is open. The native polling path works without WebSockets; when your CRM has WebSockets configured, its existing popup job delivers through that channel. No extra callback scheduler or external service is installed.
 
-You can override EspoCRM config. Create `config.php` in the root directory of the repository. This file will be applied after EspoCRM installation (when building).
+The normal EspoCRM daemon/cron setup remains required for scheduled background jobs, including WebSocket popup submission. Do not change production job configuration merely to install this extension.
 
-Example:
+New schedules must be in the future. A reminder cannot fall in the past. You can edit the text of an overdue callback, complete it, or reschedule it. The overdue queue has no 24-hour expiry: an open callback remains until you complete/archive it, even if a native popup was missed or dismissed.
 
-```php
-<?php
-return [
-    'useCacheInDeveloperMode' => true,
-];
-```
+Native EspoCRM popups have a configurable lookback window, defaulting to 24 hours. Dismissing a popup does not complete a callback. Completing, archiving, deleting, unscheduling, or changing its time cleans up the corresponding reminder records.
 
-## Building
+## Upgrade, uninstall, and recovery
 
-After building, EspoCRM instance with installed extension will be available at `site` directory. You will be able to access it with credentials:
+Install a newer ZIP over the current installation. Do not uninstall first. The extension's data is stored in the `DovAgentNote` entity/table and remains in the same CRM database backups as other business data.
 
-* Username: admin
-* Password: 1
+Uninstall removes the UI/module and outstanding extension reminders, while keeping note records. Reinstalling restores access to those entries and rearms future reminders whose reminder time is still in the future. Past callbacks return in the overdue list. A normal in-place upgrade does not recreate dismissed popups or duplicate existing reminders.
 
-### Preparation
+Do not run a hard rebuild as a cleanup step after uninstalling if you intend to restore extension data. Keep your database/file backup for rollback. The extension does not upgrade EspoCRM itself.
 
-1. You need to have *node*, *npm*, *composer* installed.
-2. Run `npm install` (or `npm ci` if you are not building the extension from scratch).
-3. Create a database. Note that without the created database instance building will fail. The database name is set in the `config.json` file. You can change it.
+## Build and run the disposable test instance
 
-### Full EspoCRM instance building
+Node.js 22+ and Docker are recommended for the supplied development/test tools. No Node.js service or npm package is required on the production CRM server.
 
-It will download EspoCRM (from the repository specified in the config), then build and install it (in the `site` directory). Then, it will install the extension in the instance.
-
-Command:
-
-```
-npm run all
-```
-
-Note: If an error occurred, check `site/data/logs/` for details. It's often a database is not created.
-
-The command removes the previously installed EspoCRM instance, but keep the database intact. Use this command to update the dev instance to the latest version or to any specific version (*espocrm.branch* parameter in the config).
-
-After the instance is ready, if your webserver is run under another user, you might need to fix file [ownership](https://docs.espocrm.com/administration/server-configuration/#ownership) (in the `site` directory).
-
-### Copying extension files to EspoCRM instance
-
-You need to run this command every time you make changes in `src` directory, and you want to try these changes on Espo instance.
-
-Command:
-
-```
-npm run sync
+```powershell
+npm.cmd ci
+npx.cmd playwright install chromium
+npm.cmd run dev:setup
+npm.cmd test
 ```
 
-To avoid running this command manually, use a file watcher in your IDE. The configuration for PhpStorm is included in this repository and enabled by default (no need any extra configuration). See below about the file watcher.
+`dev:setup` builds the extension, starts an isolated MySQL/EspoCRM 9.3.3 project, installs the ZIP, and enables a local WebSocket test service. It creates only this project's containers and named volumes. It does not use your live CRM.
 
-### Running after-install script
+- CRM: `http://localhost:8093`
+- Local administrator: `admin` / `notes-dev-admin`
+- WebSocket: `ws://localhost:8094`
+- The credentials in `compose.dev.yaml` are disposable development credentials.
 
-AfterInstall.php will be applied for EspoCRM instance.
+`npm.cmd test` creates fresh test users and teams on that instance, exercises the real API and Chromium UI, and tests installation/uninstall/reinstall. It leaves fixtures available for inspection. Screenshots and fixture IDs are written to ignored `test-results/`.
 
-Command:
-
-```
-node build --after-install
-```
-
-### Extension package building
-
-Command:
-
-```
-npm run extension
+```powershell
+npm.cmd run extension       # builds build/espo-notes-1.0.0.zip
+npm.cmd run test:integration
+npm.cmd run test:browser    # requires fixtures from test:integration and dev:setup
+npm.cmd run test:lifecycle
+npm.cmd run dev:stop        # stops this project's services, keeps its test volumes
 ```
 
-The package will be created in `build` directory.
+Source follows EspoCRM's official `ext-template` layout. `config-default.json` pins the source-development tooling to tag `9.3.3`. Production files are under `src/files/custom/Espo/Modules/EspoNotes` and `src/files/client/custom/modules/espo-notes`; lifecycle scripts are under `src/scripts`. Only the `src` package content, compiled client bundle, and manifest enter the ZIP. Tests and development credentials are excluded.
 
-Note: The version number is taken from `package.json`.
+## API
 
-### Installing addition extensions
+Standard authenticated EspoCRM CRUD is available at `/api/v1/DovAgentNote`. Writable fields are `description`, `customerName`, `phoneNumber`, `isCallback`, `dateStart`, `reminderMinutes`, `status`, `parentType`, and `parentId`. Callback datetimes use EspoCRM's UTC `YYYY-MM-DD HH:mm:ss` format. `reminderMinutes` accepts `-1`, `0`, `5`, `15`, or `60`; `-1` disables the popup. Status accepts `Open`, `Completed`, or `Archived`.
 
-If your extension requires other extensions, there is a way to install them automatically while building the instance.
+The server generates `name`, sets `assignedUserId`/`teamsIds`, and controls native reminder payloads. Direct writes to sharing fields are ignored or rejected. Relationship endpoints cannot change note sharing. Send the last returned `versionNumber` in the `X-Version-Number` header on PUT to detect conflicting edits; both the panel and native record screens do this.
 
-Necessary steps:
+Primary filters are `open`, `callbacks`, `overdue`, and `history`. Use EspoCRM's bracketed query parameters for advanced filters, e.g. `where[0][type]=equals&where[0][attribute]=status&where[0][value]=Open`. Permissions apply to lists, details, searches, counts, and parent selection.
 
-1. Add the current EspoCRM version to the `config.php`:
+## Validation and pilot
 
-    ```php
-    <?php
-    return [
-        'version' => '9.3.0',
-    ];
-    ```
+See [VALIDATION.md](VALIDATION.md) for the executed checks and remaining production validation. Pilot with two agents and one manager: create notes, link a real record, schedule a callback, confirm actual popup delivery, complete it, and verify the manager can review without editing.
 
-2. Create the `extensions` directory in the root directory of your repository.
-3. Put needed extensions (e.g. `my-extension-1.0.0.zip`) in this directory.
+This package does not create Tasks, Calls, Stream posts, attachments, email/SMS alerts, or dialer actions.
 
-Extensions will be installed automatically after running the command `node build --all` or `node build --install`.
+The target version is intentionally 9.3.3. Separately review your CRM patch level: the vendor documents an admin-only code-execution vulnerability affecting versions through 9.3.3, patched in 9.3.4: https://github.com/espocrm/espocrm/security/advisories/GHSA-7922-x7cf-j54x.
 
-## Development workflow
+## Provenance
 
-1. Do development in `src` dir.
-2. Run `npm run sync`.
-3. Test changes in EspoCRM instance at `site` dir.
-
-## Using entity manager to create entities
-
-You can block out new entity types right in Espo (using Entity Manager) and then copy generated custom files (`site/custom` dir) to the repository (`src` dir) using `copy-custom.js` script.
-
-1. Create entity types, fields, layouts, relationships in Espo (it should be available in `site` dir after building).
-2. Run `node copy-custom.js`. It will copy all files from `site/custom` to `src/files/custom/Espo/Modules/{@name}` and apply needed modifications to files.
-3. Remove files from `site/custom`.
-4. Run `npm run sync`. It will copy files from the repository to Espo build (`site/custom//Espo/Modules/{@name}` dir).
-5. Clear cache in Espo.
-6. Test in Espo.
-7. Commit changes.
-
-You can remove `copy-custom.js` from the repository if you don't plan to use it future.
-
-## Using composer in extension
-
-If your extension requires additional libraries, they can be installed by Composer:
-
-1. Create a file `src/files/custom/Espo/Modules/{@name}/composer.json` with your dependencies. You can change dir to this directory and add composer dependencies using *composer require*.
-2. Once you run `npm run all` or `npm run composer-install`, composer dependencies will be automatically installed.
-3. Create a file `src/files/custom/Espo/Modules/{@name}/Resources/autoload.json`.
-
-
-The `autoload.json` file defines paths for namespaces:
-
-```json
-{
-    "psr-4": {
-        "LibraryNamespace\\": "custom/Espo/Modules/{@name}/vendor/<vendor-name>/<library-name>/path/to/src"
-    }
-}
-```
-
-This definition is needed because in EspoCRM extensions are not installed via Composer, they are included in runtime.
-
-For static analysis, add to `phpstan.neon`:
-
-```
-    excludePaths:
-        - src/files/custom/Espo/Modules/*/vendor
-    scanDirectories:
-        - site/custom/Espo/Modules/{@name}/vendor
-```
-
-Note: The extension build will contain only the `vendor` directory without the `composer.json` file.
-
-Note: You need to git commit both `composer.json` and `composer.lock` files.
-
-## Versioning
-
-The version number is stored in `package.json` and `package-lock.json`.
-
-Bumping version:
-
-```
-npm version patch
-npm version minor
-npm version major
-```
-
-## Tests
-
-To prepare an Espo instance for tests, run:
-
-```
-npm run prepare-test
-```
-
-It downloads the Espo package, unzips it in the *site* directory, and then runs composer install. To be used for unit tests and static analysis in CI environment as it takes less time than the full installation (with database).
-
-### Unit tests
-
-You need to install composer dev dependencies in the root first:
-
-```
-composer install
-```
-
-This root composer serves only for unit tests static analysis.
-
-Command to run unit tests:
-
-```
-vendor/bin/phpunit
-```
-
-or with a path:
-
-```
-vendor/bin/phpunit tests/unit/Espo/Modules/{@name}
-```
-
-or:
-
-```
-npm run unit-tests
-```
-
-Unit tests should be placed in `tests/unit/Espo/Modules/{@name}` directory and be in `tests\unit\Espo\Modules\{@name}`
-namespace.
-
-### Static analysis
-
-You need to install composer dev dependencies in the root first:
-
-```
-composer install
-```
-
-Command to run static analysis:
-
-```
-vendor/bin/phpstan
-```
-
-or:
-
-```
-npm run sa
-```
-
-PHPStan scans sources in the *src* and *site* directories as it's configured in *phpstan.neon*.
-
-### Integration tests
-
-Integrations tests are run from the *site* directory.
-
-You need to build a test instance first:
-
-1. `npm run sync`
-2. `(cd site; grunt test)`
-
-    You need to create a config file `tests/integration/config.php`:
-
-    ```php
-    <?php
-
-    return [
-        'database' => [
-            'driver' => 'pdo_mysql',
-            'host' => 'localhost',
-            'charset' => 'utf8mb4',
-            'dbname' => 'TEST_DB_NAME',
-            'user' => 'YOUR_DB_USER',
-            'password' => 'YOUR_DB_PASSWORD',
-        ],
-    ];
-    ```
-
-Command to run integration tests:
-
-```
-(npm run sync; cd site; vendor/bin/phpunit tests/integration/Espo/Modules/{@name})
-```
-
-or:
-
-```
-npm run integration-tests
-```
-
-Note that integration tests needs the full Espo installation.
-
-Integration tests should be placed in `tests/integration/Espo/Modules/{@name}` directory
-and be in `tests\integration\Espo\Modules\{@name}` namespace.
-
-### GitHub workflow
-
-A workflow running unit tests and static analysis is defined in `.github/workflows/test.yml.disabled`.
-Remove `.disabled` from the filename to activate the workflow.
-
-## Configuring IDE
-
-You need to set the following paths to be ignored in your IDE:
-
-* `build`
-* `site/build`
-* `site/custom/`
-* `site/client/custom/`
-* `site/tests/unit/Espo/Modules/{@name}`
-* `site/tests/integration/Espo/Modules/{@name}`
-
-### File watcher
-
-Note: The File Watcher configuration for PhpStorm is included in this repository (no need to configure).
-
-You can set up a file watcher in the IDE to automatically copy and transpile files upon saving.
-
-File watcher parameters for PhpStorm:
-
-* Program: `node`
-* Arguments: `build --copy-file --file=$FilePathRelativeToProjectRoot$`
-* Working Directory: `$ProjectFileDir$`
-
-## JavaScript frontend libraries
-
-Install *rollup*.
-
-In `extension.json`, add a command that will bundle the needed library into an AMD module. Example:
-
-```json
-{
-    "scripts": [
-        "npx rollup node_modules/some-lib/build/esm/index.mjs --format amd --file build/assets/lib/some-lib.js --amd.id some-lib"
-    ]
-}
-```
-
-Add the library module path to `src/files/custom/Espo/Modules/{@name}/Resources/metadata/app/jsLibs.json`
-
-```json
-{
-    "some-lib": {
-        "path": "client/custom/modules/{@nameHyphen}/lib/some-lib.js"
-    }
-}
-```
-
-When you build, the library module will be automatically included in the needed location.
-
-Note that you may also need to create *rollup.config.js* to set some additional Rollup parameters that are not supported via CLI usage.
-
-## Updating tooling libraries
-
-Update the version number of espo-extension-tools in package.json to the [latest one](https://github.com/espocrm/extension-tools/releases).
-
-Run:
-
-```
-npm update espo-extension-tools
-npm update espo-frontend-build-tools
-```
-
-Or just update everything:
-
-```
-npm update
-```
-
-## License
-
-(change this section after initialization)
-
-Change the license in `LICENSE` file.
+Scaffold/build tooling: https://github.com/espocrm/ext-template and https://github.com/espocrm/extension-tools. Runtime integration was checked against EspoCRM tag `9.3.3`, commit `2d1b28bb3becd64b2d0d4e016b146ec4e8302f85`.
